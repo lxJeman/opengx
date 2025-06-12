@@ -48,8 +48,11 @@ class TabManager {
             if (e.key === 'Enter') this.loadUrl();
         });
 
-        // Create initial tab
-        this.createTab();
+        // Only create initial tab if we're not expecting a detached tab
+        let params = new URLSearchParams(window.location.search);
+        if (!params.get('waitForDetachedTab')) {
+            this.createTab();
+        }
 
         // Handle IPC events for tab merging
         ipc.receive('merge-tabs', ({ tabs, sourceWindowId }) => {

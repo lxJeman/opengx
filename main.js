@@ -56,10 +56,21 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Track detachments in progress
+const detachmentsInProgress = new Set();
+
 // Handle tab detachment
 ipcMain.on('detach-tab', (event, { tabId, url, title, bounds }) => {
   console.log('Received detach-tab event:', { tabId, url, title, bounds });
+  
+  // Prevent duplicate detachments
+  if (detachmentsInProgress.has(tabId)) {
+    console.log('Detachment already in progress for tab:', tabId);
+    return;
+  }
+  
   try {
+    detachmentsInProgress.add(tabId);
     const sourceWindow = BrowserWindow.fromWebContents(event.sender);
     console.log('Source window ID:', sourceWindow.id);
     
@@ -93,8 +104,10 @@ ipcMain.on('detach-tab', (event, { tabId, url, title, bounds }) => {
       sourceWindowId: sourceWindow.id
     });
 
-    // Load the window first
-    newWindow.loadFile('index.html');
+    // Load the window with a query parameter to indicate we're waiting for a detached tab
+    newWindow.loadFile('index.html', {
+      query: { 'waitForDetachedTab': 'true' }
+    });
 
     // Wait for window to be ready before sending tab data
     newWindow.webContents.once('did-finish-load', () => {
@@ -111,6 +124,12 @@ ipcMain.on('detach-tab', (event, { tabId, url, title, bounds }) => {
     // Handle window close
     newWindow.on('closed', () => {
       browserWindows.delete(newWindow.id);
+      detachmentsInProgress.delete(tabId);
+    });
+
+    // Also clean up if window fails to load
+    newWindow.webContents.on('did-fail-load', () => {
+      detachmentsInProgress.delete(tabId);
     });
 
   } catch (error) {
